@@ -260,6 +260,81 @@ flowchart LR
 
 ---
 
+## Pricing Comparison (Auth0)
+
+The flows themselves don't have different per-request costs — the pricing difference comes from **what each flow consumes on your Auth0 bill**.
+
+### Billing Impact by Flow
+
+| Billing dimension | Auth Code + PKCE (SPA) | MCP Auth |
+|---|---|---|
+| **MAU count** | 1 MAU per human user who logs in | Same — each user who approves an MCP client also counts as 1 MAU |
+| **Applications** | 1 SPA registered manually | N dynamically registered clients — each MCP client creates a new Application record |
+| **Dynamic Client Registration** | Not needed | **Requires Enterprise tier** — not available on Free, Essentials, or Professional plans |
+| **M2M tokens** | Typically not used | MCP servers may also need M2M tokens for server-to-server validation — these have **separate hard limits** per tier |
+| **Token requests** | Proportional to users | Potentially higher — MCP clients may re-authorize more frequently (short-lived tokens, no refresh token strategy) |
+
+### Auth0 Plan Comparison
+
+The critical line item is **Dynamic Client Registration (RFC 7591)**:
+
+| Auth0 Plan | Price (as of early 2025) | Dynamic Client Reg | Max Applications |
+|---|---|---|---|
+| **Free** | $0 (7,500 MAU) | No | Limited |
+| **Essentials** | From $35/mo | No | Limited |
+| **Professional** | From $240/mo | No | Limited |
+| **Enterprise** | Custom pricing | **Yes** | Negotiable |
+
+> **Key takeaway:** MCP Auth with open dynamic registration **requires Enterprise**, which typically starts at **$30k+/year**. This is the single biggest pricing gap between the two flows.
+
+### Cost by Scenario
+
+```mermaid
+flowchart LR
+    subgraph FREE["Free / Essentials"]
+        direction TB
+        F1["SPA + PKCE only"]
+        F2["$0 – $420/yr"]
+    end
+
+    subgraph PRO["Professional"]
+        direction TB
+        P1["SPA + PKCE<br/>+ pre-registered MCP clients"]
+        P2["~$2,880/yr"]
+    end
+
+    subgraph ENT["Enterprise"]
+        direction TB
+        E1["SPA + PKCE<br/>+ open dynamic MCP registration"]
+        E2["$30k+/yr"]
+    end
+
+    FREE ~~~ PRO ~~~ ENT
+
+    style FREE fill:#2d6a4f,color:#fff
+    style PRO fill:#b45309,color:#fff
+    style ENT fill:#9b2226,color:#fff
+```
+
+| Scenario | Recommended plan | Estimated annual cost |
+|---|---|---|
+| SPA only (PKCE) | **Free** up to 7,500 MAU, then **Essentials/Professional** | $0 – $2,880/yr |
+| SPA + MCP Auth (few known agents) | **Professional** + pre-register clients manually | ~$2,880/yr |
+| SPA + MCP Auth (open dynamic registration) | **Enterprise** or self-host MCP auth layer | $30k+/yr or infra cost |
+
+### Workarounds to Avoid Enterprise Pricing
+
+If you want to support MCP clients without paying for Auth0 Enterprise:
+
+1. **Proxy the registration** — build your own registration endpoint that creates Auth0 applications via the Management API. Stay on Professional, but you own the registration logic and rate limits.
+2. **Pre-register known MCP clients** — if you control which AI agents connect, register them manually in the dashboard like any SPA. No dynamic registration needed, no Enterprise requirement.
+3. **Separate authorization server for MCP** — use a self-hosted solution (Keycloak, ORY Hydra) for the MCP auth layer, keep Auth0 for your SPA users. Splits the bill.
+4. **Use a different IdP for MCP** — AWS Cognito supports dynamic registration on its standard tier; could be a cheaper MCP auth backend.
+
+> **Note:** Auth0 pricing changes frequently. Always verify current rates at [auth0.com/pricing](https://auth0.com/pricing) before making architectural decisions.
+
+---
+
 ## References
 
 - [RFC 6749 — OAuth 2.0 Authorization Framework](https://datatracker.ietf.org/doc/html/rfc6749)
