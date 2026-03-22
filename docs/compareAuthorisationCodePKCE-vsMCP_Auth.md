@@ -162,7 +162,7 @@ flowchart LR
         P1[Pre-registered client_id] --> P2[User opens SPA]
         P2 --> P3[Redirect to Auth0 /authorize]
         P3 --> P4[User logs in]
-        P4 --> P5[Auth code → Token exchange]
+        P4 --> P5[Auth code + Token exchange]
         P5 --> P6[SPA calls Your API]
     end
 
@@ -171,9 +171,16 @@ flowchart LR
         M1["Discovery via /.well-known"] --> M2[Dynamic Client Registration]
         M2 --> M3[Redirect to Auth0 /authorize]
         M3 --> M4[User approves]
-        M4 --> M5[Auth code → Token exchange]
+        M4 --> M5[Auth code + Token exchange]
         M5 --> M6[Agent calls MCP Server tools]
     end
+
+    P1 ~~~ M1
+    P2 ~~~ M2
+    P3 ~~~ M3
+    P4 ~~~ M4
+    P5 ~~~ M5
+    P6 ~~~ M6
 ```
 
 | Aspect | PKCE (SPA to API) | MCP Auth (Agent to MCP Server) |
