@@ -262,28 +262,74 @@ flowchart LR
 
 ## Pricing Comparison (Auth0)
 
+> **Disclaimer:** Auth0 (Okta Customer Identity Cloud) restructured pricing in 2024-2025. The figures below reflect the latest known pricing as of early 2025. Auth0's pricing page is dynamically rendered and cannot be scraped — **always verify at [auth0.com/pricing](https://auth0.com/pricing)** before making decisions.
+
 The flows themselves don't have different per-request costs — the pricing difference comes from **what each flow consumes on your Auth0 bill**.
 
-### Billing Impact by Flow
+### Auth0 Plan Structure (2024-2025)
+
+Auth0 now offers separate **B2C** (Customer Identity) and **B2B** (SaaS/Business Identity) tracks:
+
+#### B2C Plans (Customer Identity)
+
+| Feature | Free | Essentials | Professional | Enterprise |
+|---|---|---|---|---|
+| **Price** | $0 | From ~$35/mo (annual) | From ~$240/mo (annual) | Custom (typically $30k+/yr) |
+| **MAU included** | Up to 25,000 | Starts at 500, scales with usage | Starts at 500, scales with usage | Custom |
+| **Social Connections** | 2 | 2 | Unlimited | Unlimited |
+| **M2M Tokens** | Small quota | Limited | Higher limits | Custom / Unlimited |
+| **Custom Domains** | No | No | Yes | Yes |
+| **Organizations** | No | No | Limited / Add-on | Yes |
+| **Dynamic Client Registration** | No | No | No | **Yes** |
+| **MFA** | Basic | Basic | Advanced (Adaptive MFA) | Full |
+| **RBAC** | Yes | Yes | Yes | Yes |
+| **Enterprise Connections (SAML/OIDC)** | No | No | Add-on | Yes |
+| **Log Retention** | 2 days | 2 days | 10 days | 30 days |
+| **SLA** | None | None | 99.9% | 99.99% |
+| **Attack Protection** | Basic | Basic | Advanced | Full |
+
+#### B2B Plans (SaaS / Business Identity)
+
+B2B plans mirror the tier structure but include **Organizations** support from lower tiers, plus:
+
+- Enterprise Connections (SAML/OIDC SSO) at lower tiers
+- Organization-level branding and member invitation flows
+- Self-service SSO and SCIM provisioning (added mid-2024)
+- Priced higher per-MAU than B2C equivalents
+
+### Billing Impact: PKCE vs MCP Auth
 
 | Billing dimension | Auth Code + PKCE (SPA) | MCP Auth |
 |---|---|---|
 | **MAU count** | 1 MAU per human user who logs in | Same — each user who approves an MCP client also counts as 1 MAU |
 | **Applications** | 1 SPA registered manually | N dynamically registered clients — each MCP client creates a new Application record |
-| **Dynamic Client Registration** | Not needed | **Requires Enterprise tier** — not available on Free, Essentials, or Professional plans |
-| **M2M tokens** | Typically not used | MCP servers may also need M2M tokens for server-to-server validation — these have **separate hard limits** per tier |
+| **Dynamic Client Registration** | Not needed | **Requires Enterprise tier** — not available on Free, Essentials, or Professional |
+| **M2M tokens** | Typically not used | MCP servers may need M2M tokens for server-to-server validation — **separate hard limits per tier**, can be costly |
 | **Token requests** | Proportional to users | Potentially higher — MCP clients may re-authorize more frequently (short-lived tokens, no refresh token strategy) |
 
-### Auth0 Plan Comparison
+### M2M Token Pricing (Critical for MCP)
 
-The critical line item is **Dynamic Client Registration (RFC 7591)**:
+M2M tokens are a common cost surprise. Auth0 charges separately for machine-to-machine token usage:
 
-| Auth0 Plan | Price (as of early 2025) | Dynamic Client Reg | Max Applications |
-|---|---|---|---|
-| **Free** | $0 (7,500 MAU) | No | Limited |
-| **Essentials** | From $35/mo | No | Limited |
-| **Professional** | From $240/mo | No | Limited |
-| **Enterprise** | Custom pricing | **Yes** | Negotiable |
+| Plan | M2M Tokens Included | Overage |
+|---|---|---|
+| **Free** | ~1,000/mo | Not available |
+| **Essentials** | ~1,000/mo | Paid add-on |
+| **Professional** | ~5,000/mo | Paid add-on |
+| **Enterprise** | Custom / Unlimited | Negotiated |
+
+> MCP servers that validate tokens against Auth0 or call the Management API consume M2M tokens. At scale, this can exceed included quotas quickly.
+
+### The Dynamic Client Registration Gate
+
+The single biggest pricing differentiator for MCP Auth:
+
+| Auth0 Plan | Dynamic Client Reg (RFC 7591) | Why it matters for MCP |
+|---|---|---|
+| **Free** | No | Cannot support open MCP client registration |
+| **Essentials** | No | Same limitation |
+| **Professional** | No | Same limitation |
+| **Enterprise** | **Yes** | Required for open MCP Auth — minimum ~$30k+/yr |
 
 > **Key takeaway:** MCP Auth with open dynamic registration **requires Enterprise**, which typically starts at **$30k+/year**. This is the single biggest pricing gap between the two flows.
 
@@ -291,36 +337,44 @@ The critical line item is **Dynamic Client Registration (RFC 7591)**:
 
 ```mermaid
 flowchart LR
-    subgraph FREE["Free / Essentials"]
+    subgraph FREE["Free"]
         direction TB
-        F1["SPA + PKCE only"]
-        F2["$0 – $420/yr"]
+        F1["SPA + PKCE only<br/>up to 25k MAU"]
+        F2["$0/yr"]
+    end
+
+    subgraph ESS["Essentials"]
+        direction TB
+        S1["SPA + PKCE<br/>low-volume production"]
+        S2["~$420/yr"]
     end
 
     subgraph PRO["Professional"]
         direction TB
-        P1["SPA + PKCE<br/>+ pre-registered MCP clients"]
+        P1["SPA + PKCE<br/>+ pre-registered MCP clients<br/>+ custom domain + Adaptive MFA"]
         P2["~$2,880/yr"]
     end
 
     subgraph ENT["Enterprise"]
         direction TB
-        E1["SPA + PKCE<br/>+ open dynamic MCP registration"]
+        E1["SPA + PKCE<br/>+ open dynamic MCP registration<br/>+ SAML SSO + SLA"]
         E2["$30k+/yr"]
     end
 
-    FREE ~~~ PRO ~~~ ENT
+    FREE ~~~ ESS ~~~ PRO ~~~ ENT
 
     style FREE fill:#2d6a4f,color:#fff
+    style ESS fill:#1b4332,color:#fff
     style PRO fill:#b45309,color:#fff
     style ENT fill:#9b2226,color:#fff
 ```
 
 | Scenario | Recommended plan | Estimated annual cost |
 |---|---|---|
-| SPA only (PKCE) | **Free** up to 7,500 MAU, then **Essentials/Professional** | $0 – $2,880/yr |
-| SPA + MCP Auth (few known agents) | **Professional** + pre-register clients manually | ~$2,880/yr |
-| SPA + MCP Auth (open dynamic registration) | **Enterprise** or self-host MCP auth layer | $30k+/yr or infra cost |
+| SPA only, dev/prototype | **Free** (up to 25,000 MAU) | $0 |
+| SPA only, low-volume production | **Essentials** | ~$420/yr |
+| SPA + pre-registered MCP clients + custom domain | **Professional** | ~$2,880/yr |
+| SPA + open dynamic MCP registration + SSO + SLA | **Enterprise** or self-host MCP auth | $30k+/yr or infra cost |
 
 ### Workarounds to Avoid Enterprise Pricing
 
@@ -331,7 +385,7 @@ If you want to support MCP clients without paying for Auth0 Enterprise:
 3. **Separate authorization server for MCP** — use a self-hosted solution (Keycloak, ORY Hydra) for the MCP auth layer, keep Auth0 for your SPA users. Splits the bill.
 4. **Use a different IdP for MCP** — AWS Cognito supports dynamic registration on its standard tier; could be a cheaper MCP auth backend.
 
-> **Note:** Auth0 pricing changes frequently. Always verify current rates at [auth0.com/pricing](https://auth0.com/pricing) before making architectural decisions.
+> **Note:** Auth0 pricing changes frequently. The free tier MAU limit has historically varied (7,500 in some periods, 25,000 in others). Always verify current rates at [auth0.com/pricing](https://auth0.com/pricing) before making architectural decisions.
 
 ---
 
